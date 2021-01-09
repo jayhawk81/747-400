@@ -35,11 +35,15 @@ dofile("json/json.lua")
 simDR_livery_path			= find_dataref("sim/aircraft/view/acf_livery_path")
 simDR_acf_tailnum			= find_dataref("sim/aircraft/view/acf_tailnum")
 
+--Baro Sync
+simDR_baro_capt				= find_dataref("sim/cockpit/misc/barometer_setting")
+simDR_baro_fo				= find_dataref("sim/cockpit/misc/barometer_setting2")
+
 --*************************************************************************************--
 --** 				        CREATE READ-WRITE CUSTOM DATAREFS                        **--
 --*************************************************************************************--
 -- Holds all SimConfig options
-B747DR_simconfig_data					= deferred_dataref("laminar/B747/simconfig", "string")
+B747DR_simconfig_data						= deferred_dataref("laminar/B747/simconfig", "string")
 
 B747DR_efis_baro_ref_capt_sel_dial_pos		= find_dataref("laminar/B747/efis/baro_ref/capt/sel_dial_pos", "number")
 B747DR_efis_baro_ref_fo_sel_dial_pos		= deferred_dataref("laminar/B747/efis/baro_ref/fo/sel_dial_pos", "number")
@@ -47,6 +51,15 @@ B747DR_flt_inst_inbd_disp_capt_sel_dial_pos	= deferred_dataref("laminar/B747/flt
 B747DR_flt_inst_lwr_disp_capt_sel_dial_pos	= deferred_dataref("laminar/B747/flt_inst/capt_lwr_display/sel_dial_pos", "number")
 B747DR_flt_inst_inbd_disp_fo_sel_dial_pos	= deferred_dataref("laminar/B747/flt_inst/fo_inbd_display/sel_dial_pos", "number")
 B747DR_flt_inst_lwr_disp_fo_sel_dial_pos	= deferred_dataref("laminar/B747/flt_inst/fo_lwr_display/sel_dial_pos", "number")
+B747DR_pfd_style							= deferred_dataref("laminar/B747/pfd/style", "number")
+B747DR_nd_style								= deferred_dataref("laminar/B747/nd/style", "number")
+B747DR_thrust_ref							= deferred_dataref("laminar/B747/engines/thrust_ref", "number")
+
+--Baro Sync
+B747DR_efis_baro_ref_capt_sel_dial_pos		= deferred_dataref("laminar/B747/efis/baro_ref/capt/sel_dial_pos", "number")
+B747DR_efis_baro_ref_fo_sel_dial_pos		= deferred_dataref("laminar/B747/efis/baro_ref/fo/sel_dial_pos", "number")
+B747DR_efis_baro_ref_capt_switch_pos		= deferred_dataref("laminar/B747/efis/baro_std/capt/switch_pos", "number")
+B747DR_efis_baro_ref_fo_switch_pos			= deferred_dataref("laminar/B747/efis/baro_std/fo/switch_pos", "number")
 
 --*************************************************************************************--
 --** 				        MAIN PROGRAM LOGIC                                       **--
@@ -91,8 +104,37 @@ function simconfig_values()
 	}
 end
 
+function baro_sync()
+	if simConfigData["data"].SIM.baro_sync == "YES" then
+		simDR_baro_fo = simDR_baro_capt
+		B747DR_efis_baro_ref_fo_sel_dial_pos = B747DR_efis_baro_ref_capt_sel_dial_pos
+		B747DR_efis_baro_ref_fo_switch_pos = B747DR_efis_baro_ref_capt_switch_pos
+	end
+end
+
+function check_pfd_nd_style()
+	if simConfigData["data"].PLANE.pfd_style == "CRT" then
+		B747DR_pfd_style = 0
+	elseif simConfigData["data"].PLANE.pfd_style == "LCD" then
+		B747DR_pfd_style = 1
+	end
+	
+	if simConfigData["data"].PLANE.nd_style == "CRT" then
+		B747DR_nd_style = 0
+	elseif simConfigData["data"].PLANE.nd_style == "LCD" then
+		B747DR_nd_style = 1
+	end
+end
+
+function check_thrust_ref()
+	if simConfigData["data"].PLANE.thrust_ref == "EPR" then
+		B747DR_thrust_ref = 0
+	elseif simConfigData["data"].PLANE.thrust_ref == "N1" then
+		B747DR_thrust_ref = 1
+	end
+end
+
 function set_loaded_configs()
-	simConfigData["data"] = json.decode(B747DR_simconfig_data)
 
 	--Baro
 	if simConfigData["data"].SIM.baro_indicator == "IN" then
@@ -164,4 +206,19 @@ end
 function flight_start()
 	B747DR_simconfig_data=json.encode(simConfigData["data"]["values"]) --make the simConfig data available to other modules
 	run_after_time(aircraft_simConfig, 3)  --Load specific simConfig data for current livery
+end
+
+function after_physics()
+	--Keep the structure fresh
+	simConfigData["data"] = json.decode(B747DR_simconfig_data)
+
+	--See if Baro's should be sync'd
+	baro_sync()
+	
+	--PFD/ND Styles
+	check_pfd_nd_style()
+	
+	--Thrust Ref Setting
+	check_thrust_ref()
+
 end
